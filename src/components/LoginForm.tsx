@@ -23,7 +23,7 @@ export function LoginForm() {
       });
 
       if (response.ok) {
-        router.push("/");
+        window.location.href = "/";
         return;
       }
 
