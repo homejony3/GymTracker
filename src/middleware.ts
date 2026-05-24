@@ -1,36 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHmac } from 'crypto';
 
 /**
  * Next.js Middleware for authentication.
- * Uses Node.js crypto module for JWT verification.
+ * Uses Web Crypto API for Edge-compatible JWT verification.
  *
  * Requirements: 1.4, 1.5, 9.3, 9.5
  */
 
-export const runtime = 'nodejs';
-
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 
 /**
- * Verify HS256 JWT using Node.js crypto.
+ * Base64url decode to Uint8Array.
  */
-function verifyToken(token: string): { userId: string } | null {
+function base64UrlDecode(str: string): Uint8Array {
+  // Add padding
+  const padded = str + '='.repeat((4 - (str.length % 4)) % 4);
+  // Convert base64url to base64
+  const base64 = padded.replace(/-/g, '+').replace(/_/g, '/');
+  // Decode
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+/**
+ * Verify HS256 JWT using Web Crypto API (Edge Runtime compatible).
+ */
+async function verifyToken(token: string): Promise<{ userId: string } | null> {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
 
     const [headerB64, payloadB64, signatureB64] = parts;
 
-    // Verify signature using HMAC-SHA256
-    const expectedSignature = createHmac('sha256', JWT_SECRET)
-      .update(`${headerB64}.${payloadB64}`)
-      .digest('base64url');
+    // Import the secret key
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(JWT_SECRET);
+    const key = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
 
-    if (expectedSignature !== signatureB64) return null;
+    // Compute expected signature
+    const data = encoder.encode(`${headerB64}.${payloadB64}`);
+    const signatureBuffer = await crypto.subtle.sign('HMAC', key, data);
+
+    // Convert computed signature to base64url
+    const computedSignature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    // Compare signatures
+    if (computedSignature !== signatureB64) return null;
 
     // Decode payload
-    const payloadJson = Buffer.from(payloadB64, 'base64url').toString('utf-8');
+    const payloadBytes = base64UrlDecode(payloadB64);
+    const payloadJson = new TextDecoder().decode(payloadBytes);
     const payload = JSON.parse(payloadJson);
 
     // Check expiration
@@ -48,13 +80,13 @@ function verifyToken(token: string): { userId: string } | null {
   }
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const token = request.cookies.get('auth_token')?.value;
   const isApiRoute = pathname.startsWith('/api/');
 
-  const payload = token ? verifyToken(token) : null;
+  const payload = token ? await verifyToken(token) : null;
 
   if (!payload) {
     if (isApiRoute) {
