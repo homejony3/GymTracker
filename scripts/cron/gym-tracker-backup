@@ -1,0 +1,12 @@
+# Gym Tracker - Automated Database Backup
+# Schedule: Daily at 02:00 AM
+# Install: sudo cp scripts/cron/gym-tracker-backup /etc/cron.d/gym-tracker-backup
+#
+# Environment variables are loaded from the .env file or set inline below.
+# Adjust the paths to match your deployment.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Daily backup at 02:00
+0 2 * * * root POSTGRES_USER=gymtracker POSTGRES_DB=gymtracker POSTGRES_HOST=localhost POSTGRES_PORT=5432 BACKUP_DIR=/backups /opt/gym-tracker/scripts/backup.sh >> /var/log/gym-tracker-backup.log 2>&1

@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.gitignore
+.env
+.env.local
+.env*.local
+*.md
+.vscode
+.kiro
+tests
+coverage
+.eslintrc.json
+vitest.config.ts

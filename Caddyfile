@@ -1,0 +1,20 @@
+# Caddy reverse proxy configuration for Gym Tracker
+# Replace "gym.example.com" with your actual domain name.
+# Caddy will automatically obtain and renew TLS certificates via Let's Encrypt.
+
+gym.example.com {
+	reverse_proxy app:3000
+
+	header {
+		# HSTS - enforce HTTPS for 1 year including subdomains
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		# Prevent clickjacking
+		X-Frame-Options "DENY"
+		# Prevent MIME type sniffing
+		X-Content-Type-Options "nosniff"
+		# Referrer policy
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Remove server identification header
+		-Server
+	}
+}
