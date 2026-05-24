@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 
+export const runtime = 'nodejs';
+
 /**
  * Next.js Middleware for authentication.
  *
