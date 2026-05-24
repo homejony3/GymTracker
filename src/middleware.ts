@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import jwt from 'jsonwebtoken';
 
 /**
  * Next.js Middleware for authentication.
@@ -15,68 +16,22 @@ import { NextRequest, NextResponse } from 'next/server';
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 
 /**
- * Lightweight JWT verification for Edge Runtime.
- * Verifies HS256 tokens using Web Crypto API (no Node.js crypto dependency).
- * Returns the decoded payload or null if invalid/expired.
+ * Verify a JWT token and extract the userId.
+ * Returns null if the token is invalid or expired.
  */
-async function verifyTokenEdge(token: string): Promise<{ userId: string } | null> {
+function verifyToken(token: string): { userId: string } | null {
   try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-
-    const [headerB64, payloadB64, signatureB64] = parts;
-
-    // Verify the signature using HMAC-SHA256
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(JWT_SECRET),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['verify']
-    );
-
-    // Convert base64url signature to ArrayBuffer
-    const signature = base64UrlToArrayBuffer(signatureB64);
-    const data = encoder.encode(`${headerB64}.${payloadB64}`);
-
-    const valid = await crypto.subtle.verify('HMAC', key, signature, data);
-    if (!valid) return null;
-
-    // Decode and validate payload
-    const payload = JSON.parse(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/')));
-
-    // Check expiration
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-      return null;
-    }
-
-    // Validate userId exists
+    const payload = jwt.verify(token, JWT_SECRET) as { userId: string };
     if (payload && typeof payload.userId === 'string') {
       return { userId: payload.userId };
     }
-
     return null;
   } catch {
     return null;
   }
 }
 
-/**
- * Convert a base64url-encoded string to an ArrayBuffer.
- */
-function base64UrlToArrayBuffer(base64url: string): ArrayBuffer {
-  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
-  const padding = '='.repeat((4 - (base64.length % 4)) % 4);
-  const binary = atob(base64 + padding);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
-export async function middleware(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Get the auth token from the HTTP-only cookie
@@ -86,7 +41,7 @@ export async function middleware(request: NextRequest) {
   const isApiRoute = pathname.startsWith('/api/');
 
   // Verify the token
-  const payload = token ? await verifyTokenEdge(token) : null;
+  const payload = token ? verifyToken(token) : null;
 
   if (!payload) {
     // Unauthenticated
@@ -125,15 +80,6 @@ export async function middleware(request: NextRequest) {
  */
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - /login
-     * - /api/auth/login
-     * - /api/health
-     * - /_next/static (static files)
-     * - /_next/image (image optimization)
-     * - /favicon.ico
-     */
     '/((?!login|api/auth/login|api/health|_next/static|_next/image|favicon\\.ico).*)',
   ],
 };
