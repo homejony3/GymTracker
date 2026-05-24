@@ -52,7 +52,12 @@ async function verifyToken(token: string): Promise<{ userId: string } | null> {
     const signatureBuffer = await crypto.subtle.sign('HMAC', key, data);
 
     // Convert computed signature to base64url
-    const computedSignature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))
+    const sigArray = new Uint8Array(signatureBuffer);
+    let binary = '';
+    for (let i = 0; i < sigArray.length; i++) {
+      binary += String.fromCharCode(sigArray[i]);
+    }
+    const computedSignature = btoa(binary)
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '');
